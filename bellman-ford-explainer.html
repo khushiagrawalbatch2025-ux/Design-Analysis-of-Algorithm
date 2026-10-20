@@ -1,0 +1,198 @@
+<!DOCTYPE html>
+<html lang="en"><head><meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1, viewport-fit=cover">
+<title>Bellman-Ford Algorithm – 40s Explainer</title>
+<style>
+:root{color-scheme:dark;box-sizing:border-box;padding-top:env(safe-area-inset-top,0px);padding-bottom:env(safe-area-inset-bottom,0px);--bg:#02060f;--fg:#dff3ff;--cy:#22e6ff}
+html{scroll-padding-top:env(safe-area-inset-top,0px)}
+html,body{margin:0;background:var(--bg);color:var(--fg);font-family:'Segoe UI',system-ui,sans-serif}
+body{min-height:100vh;display:flex;flex-direction:column;align-items:center;justify-content:center;gap:10px}
+#wrap{position:relative;width:min(100vw,calc((100vh - 70px) * 16 / 9));aspect-ratio:16/9;background:#050b1f;overflow:hidden}
+svg{width:100%;height:100%;display:block}
+#ov{position:absolute;inset:0;display:flex;align-items:center;justify-content:center;background:rgba(2,6,15,.55)}
+#play{font-size:clamp(14px,2.4vw,30px);letter-spacing:.12em;padding:.7em 1.6em;border-radius:999px;border:2px solid var(--cy);background:rgba(34,230,255,.12);color:var(--cy);cursor:pointer;box-shadow:0 0 30px rgba(34,230,255,.45)}
+#bar{display:flex;gap:14px;align-items:center;font-size:14px;color:#8fb2d6;flex-wrap:wrap;justify-content:center;padding:0 10px}
+#bar button{background:#0b1632;color:var(--fg);border:1px solid #27406e;border-radius:8px;padding:6px 12px;cursor:pointer}
+</style></head><body>
+<div id="wrap">
+<svg id="s" viewBox="0 0 1920 1080" xmlns="http://www.w3.org/2000/svg">
+<defs>
+<radialGradient id="bg" cx="50%" cy="45%" r="75%"><stop offset="0" stop-color="#0c1a45"/><stop offset="1" stop-color="#040916"/></radialGradient>
+<pattern id="grid" width="60" height="60" patternUnits="userSpaceOnUse"><path d="M60 0H0V60" fill="none" stroke="#1b2f66" stroke-width="1" opacity=".35"/></pattern>
+<filter id="glow" x="-50%" y="-50%" width="200%" height="200%"><feGaussianBlur stdDeviation="7" result="b"/><feMerge><feMergeNode in="b"/><feMergeNode in="SourceGraphic"/></feMerge></filter>
+<filter id="blur"><feGaussianBlur stdDeviation="90"/></filter>
+<marker id="mC" markerUnits="userSpaceOnUse" markerWidth="28" markerHeight="28" refX="26" refY="14" orient="auto"><path d="M0 0L28 14L0 28Z" fill="#5fb4ff"/></marker>
+<marker id="mY" markerUnits="userSpaceOnUse" markerWidth="28" markerHeight="28" refX="26" refY="14" orient="auto"><path d="M0 0L28 14L0 28Z" fill="#ffd60a"/></marker>
+<marker id="mR" markerUnits="userSpaceOnUse" markerWidth="28" markerHeight="28" refX="26" refY="14" orient="auto"><path d="M0 0L28 14L0 28Z" fill="#ff4d6d"/></marker>
+</defs>
+<rect width="1920" height="1080" fill="url(#bg)"/>
+<rect width="1920" height="1080" fill="url(#grid)"/>
+<circle id="b1" r="260" fill="#22e6ff" opacity=".12" filter="url(#blur)"/>
+<circle id="b2" r="300" fill="#8a4dff" opacity=".16" filter="url(#blur)"/>
+<rect id="red" width="1920" height="1080" fill="#ff1744" opacity="0"/>
+</svg>
+<div id="ov"><button id="play">▶ PLAY WITH NARRATION</button></div>
+</div>
+<div id="bar"><button id="mu">🔊 Sound on</button><span id="tm">0.0 / 40.0 s</span><span>Tip: screen-record this page to export an MP4.</span></div>
+<script>
+const NS='http://www.w3.org/2000/svg',S=document.getElementById('s'),$=i=>document.getElementById(i);
+const el=(t,a,p)=>{const e=document.createElementNS(NS,t);for(const k in a)e.setAttribute(k,a[k]);p.appendChild(e);return e};
+const tx=(p,x,y,s,z,fill,anc='start',w='600',ff="'Segoe UI',system-ui,sans-serif")=>{const e=el('text',{x,y,'font-size':z,fill,'text-anchor':anc,'font-weight':w,'font-family':ff},p);e.textContent=s;return e};
+const f=(t,a,b)=>Math.max(0,Math.min(1,(t-a)/(b-a))),ease=x=>x*x*(3-2*x),MONO="Consolas,'Courier New',monospace";
+const gM=el('g',{},S),gC=el('g',{},S),gP2=el('g',{},S),gP3=el('g',{},S),gP5=el('g',{},S),gH=el('g',{},S);
+
+function mk(g,a,b,w,lo,cv){
+ let p1,p2,d,pt,mid;
+ if(cv){p1=[425,581];p2=[1225,581];const q=[825,1240];d=`M${p1} Q${q} ${p2}`;mid=[825,910];
+  pt=u=>{const k=1-u;return[k*k*p1[0]+2*k*u*q[0]+u*u*p2[0],k*k*p1[1]+2*k*u*q[1]+u*u*p2[1]]}}
+ else{const dx=b[0]-a[0],dy=b[1]-a[1],L=Math.hypot(dx,dy),ux=dx/L,uy=dy/L;
+  p1=[a[0]+ux*54,a[1]+uy*54];p2=[b[0]-ux*54,b[1]-uy*54];d=`M${p1} L${p2}`;mid=[(p1[0]+p2[0])/2,(p1[1]+p2[1])/2];
+  pt=u=>[p1[0]+(p2[0]-p1[0])*u,p1[1]+(p2[1]-p1[1])*u]}
+ const p=el('path',{d,fill:'none','stroke-linecap':'round'},g);
+ const t=tx(g,mid[0]+lo[0],mid[1]+lo[1]+14,String(w).replace('-','−'),42,w<0?'#ff8fd8':'#bfe9ff','middle','700');
+ t.setAttribute('stroke','#050b1f');t.setAttribute('stroke-width','7');t.setAttribute('paint-order','stroke');
+ return{p,t,pt};
+}
+function st(e,s,t,m=1){
+ const c={n:['#5fb4ff',.85,6,'mC'],y:['#ffd60a',1,10,'mY'],r:['#ff4d6d',1,10,'mR'],d:['#5fb4ff',.25,5,'mC']}[s];
+ e.p.setAttribute('stroke',c[0]);e.p.setAttribute('stroke-width',c[2]);e.p.setAttribute('marker-end',`url(#${c[3]})`);
+ e.p.style.opacity=c[1]*m;e.t.style.opacity=(s=='d'?.4:1)*m;
+ if(s=='y'||s=='r'){e.p.setAttribute('stroke-dasharray','26 14');e.p.setAttribute('stroke-dashoffset',-t*80);e.p.setAttribute('filter','url(#glow)')}
+ else{e.p.removeAttribute('stroke-dasharray');e.p.removeAttribute('filter')}
+}
+function node(g,c,lab,col){const gg=el('g',{},g);const r=el('circle',{cx:c[0],cy:c[1],r:52,fill:'#071230',stroke:col,'stroke-width':6,filter:'url(#glow)'},gg);tx(gg,c[0],c[1]+16,lab,48,'#fff','middle','700');return gg}
+
+/* main graph */
+const C={1:[400,540],2:[800,300],3:[800,720],4:[1250,540]};
+const E=[[1,2,4,[-30,-35]],[1,3,5,[-30,40]],[2,3,-2,[42,0]],[3,4,3,[30,40]],[1,4,10,[0,40],1]];
+const EM=E.map(([a,b,w,lo,cv])=>mk(gM,C[a],C[b],w,lo,cv));
+const pulse=el('circle',{cx:400,cy:540,r:52,fill:'none',stroke:'#22e6ff','stroke-width':4},gM);
+const NM={},DM={};
+for(const v in C){NM[v]=node(gM,C[v],v,v==1?'#22e6ff':'#a66bff')}
+const DOFF={1:[0,115],2:[0,-85],3:[0,125],4:[0,115]};
+for(const v in C)DM[v]=tx(gM,C[v][0]+DOFF[v][0],C[v][1]+DOFF[v][1],'',36,'#9fe8ff','middle','700',MONO);
+const srcT=tx(gM,400,440,'SOURCE',30,'#22e6ff','middle','700');srcT.setAttribute('letter-spacing','6');
+const pk=el('circle',{r:13,fill:'#ffd60a',filter:'url(#glow)',opacity:0},gM);
+const foot=tx(gM,820,1045,'Initialize → Relax → Repeat → Detect → Reconstruct',32,'#9fe8ff','middle','600');foot.style.opacity=0;
+
+/* cycle graph */
+const CA={A:[560,760],B:[960,330],C:[1360,760]};
+const CE=[['A','B',1,[-45,-20]],['B','C',-2,[48,-12]],['C','A',-2,[0,55]]].map(([a,b,w,lo])=>mk(gC,CA[a],CA[b],w,lo));
+const CN={},CD={};
+for(const v in CA)node(gC,CA[v],v,v=='A'?'#22e6ff':'#a66bff');
+const CO={A:[0,115],B:[0,-85],C:[0,115]};
+for(const v in CA)CD[v]=tx(gC,CA[v][0]+CO[v][0],CA[v][1]+CO[v][1],'',36,'#9fe8ff','middle','700',MONO);
+const cw=tx(gC,960,925,'',46,'#ffd60a','middle','700',MONO);
+const ban=el('g',{},gC);el('rect',{x:560,y:955,width:800,height:90,rx:18,fill:'rgba(255,23,68,.22)',stroke:'#ff4d6d','stroke-width':4,filter:'url(#glow)'},ban);
+tx(ban,960,1017,'NEGATIVE CYCLE DETECTED',56,'#ff6b86','middle','800');
+const pk2=el('circle',{r:13,fill:'#ffd60a',filter:'url(#glow)',opacity:0},gC);
+
+/* panels */
+const panel=g=>el('rect',{x:1350,y:200,width:540,height:640,rx:28,fill:'rgba(10,22,56,.65)',stroke:'#22e6ff','stroke-opacity':.4,'stroke-width':2},g);
+panel(gP2);
+const l=(g,y,s,z,c,ff)=>tx(g,1400,y,s,z,c,'start','700',ff);
+l(gP2,270,'PASS 1 OF V − 1',30,'#22e6ff').setAttribute('letter-spacing','4');
+l(gP2,350,'RELAX CONDITION',26,'#7f9cc8');
+const fm=el('g',{filter:'url(#glow)'},gP2);l(fm,425,'dist[u] + weight',44,'#ffd60a',MONO);l(fm,482,'< dist[v]',44,'#ffd60a',MONO);
+const k0=l(gP2,590,'',30,'#9fb7d9'),k1=l(gP2,660,'',44,'#fff',MONO),k2=l(gP2,730,'',40,'#37ffa3',MONO);
+panel(gP3);
+l(gP3,270,'PATH COST',30,'#ffd60a').setAttribute('letter-spacing','4');
+const calc=l(gP3,360,'4 + (−2) + 3 = 5',48,'#ffd60a',MONO);calc.setAttribute('filter','url(#glow)');
+l(gP3,450,'FINAL DISTANCES',26,'#7f9cc8');
+const rows=[0,4,2,5].map((v,i)=>l(gP3,525+i*65,`Vertex ${i+1}: ${v}`,44,i==3?'#ffd60a':'#fff',MONO));
+panel(gP5);
+l(gP5,270,'SUMMARY',30,'#22e6ff').setAttribute('letter-spacing','4');
+const sm=['Negative edges supported','Negative cycles detected','Time complexity: O(V × E)'].map((s,i)=>{const g=el('g',{},gP5);el('circle',{cx:1410,cy:388+i*130,r:11,fill:'#22e6ff',filter:'url(#glow)'},g);tx(g,1438,400+i*130,s,32,'#fff','start','700');return g});
+
+const H=tx(gH,960,110,'',96,'#e8fbff','middle','800');H.setAttribute('letter-spacing','8');H.setAttribute('filter','url(#glow)');
+const HT=[[0,'BELLMAN-FORD ALGORITHM',96],[6,'EDGE RELAXATION',56],[15,'SHORTEST PATH: 1 → 2 → 3 → 4',56],[25,'NEGATIVE CYCLE DETECTION',56],[33,'BELLMAN-FORD · SUMMARY',56]];
+
+/* schedule */
+const ev=[7,8.5,10,11.5,13],UP=[[7.6,2,4],[9.1,3,5],[10.6,3,2],[12.1,4,5]],PATH=[0,2,3];
+const CK=[['Edge 1 → 2, w = 4','0 + 4 < ∞','✓ dist[2] = 4'],['Edge 1 → 3, w = 5','0 + 5 < ∞','✓ dist[3] = 5'],['Edge 2 → 3, w = −2','4 + (−2) = 2 < 5','✓ dist[3] = 2'],['Edge 3 → 4, w = 3','2 + 3 = 5 < ∞','✓ dist[4] = 5'],['Edge 1 → 4, w = 10','0 + 10 = 10 < 5','✗ no update']];
+const CV=[['B',1],['C',-1],['A',-3],['B',-2],['C',-4],['A',-6],['B',-5],['C',-7],['A',-9]],CS=26.2,CD_=.4,WARN=30.2;
+const CWP=[[25.8,'Cycle weight: 1'],[26.3,' + (−2)'],[26.8,' + (−2)'],[27.4,' = −3']];
+const bgc1=$('b1'),bgc2=$('b2'),red=$('red');
+const mn=v=>String(v).replace('-','−');
+
+function frame(t){
+ bgc1.setAttribute('cx',500+350*Math.sin(t*.25));bgc1.setAttribute('cy',300+120*Math.cos(t*.2));
+ bgc2.setAttribute('cx',1450+300*Math.cos(t*.2));bgc2.setAttribute('cy',780+120*Math.sin(t*.25));
+ const mainOp=t<30?ease(f(t,.1,1))*(1-ease(f(t,24.4,25.2))):ease(f(t,32.8,33.8));
+ const cycOp=ease(f(t,25,25.8))*(1-ease(f(t,32.2,33)));
+ gM.style.opacity=mainOp;gC.style.opacity=cycOp;
+ gP2.style.opacity=ease(f(t,6,6.6))*(1-ease(f(t,14.4,15)));
+ gP3.style.opacity=ease(f(t,15,15.6))*(1-ease(f(t,24.4,25)));
+ gP5.style.opacity=ease(f(t,33.8,34.4));
+ /* heading */
+ let sc=0;HT.forEach((h,i)=>{if(t>=h[0])sc=i});
+ const h=HT[sc],lt=t-h[0],end=(HT[sc+1]||[40])[0]-h[0];
+ H.textContent=h[1];H.setAttribute('font-size',h[2]);H.style.opacity=sc==0?ease(f(lt,0,.8))*(1-ease(f(lt,5.4,6))):Math.min(ease(f(lt,0,.5)),1-ease(f(lt,end-.4,end)));
+ /* main nodes / edges */
+ for(const v in NM)NM[v].style.opacity=ease(f(t,.5+.25*v,1.3+.25*v));
+ EM.forEach((e,i)=>{let s='n';
+  if(t>=6&&t<15){if(t>=ev[i]&&t<ev[i]+1.3)s='y';else if(i==4&&t>=ev[4]+1.3)s='d'}
+  else if(t>=15&&(t<25||t>=33)){s=PATH.includes(i)?((t>=15.3+PATH.indexOf(i)*.7||t>=33)?'y':'n'):'d'}
+  st(e,s,t,t<6?ease(f(t,1.5+.3*i,2.3+.3*i)):1)});
+ pulse.setAttribute('r',52+((t*45)%45));pulse.style.opacity=.7*(1-((t*45)%45)/45)*ease(f(t,1.2,2));
+ srcT.style.opacity=ease(f(t,2.5,3.2))*(1-ease(f(t,14.4,15)))+ease(f(t,33.2,33.8))*0;
+ let shown=false;
+ EM.forEach((e,i)=>{if(t<15&&t>=ev[i]&&t<ev[i]+.6){const q=e.pt((t-ev[i])/.6);pk.setAttribute('cx',q[0]);pk.setAttribute('cy',q[1]);shown=true}});
+ pk.style.opacity=shown?1:0;
+ for(const v in DM){let val=v==1?0:'∞',ut=-9;UP.forEach(([T,vv,x])=>{if(vv==v&&t>=T){val=x;ut=T}});
+  const fl=t-ut<.8?1-(t-ut)/.8:0;DM[v].textContent='d = '+mn(val);DM[v].setAttribute('fill',fl>0?'#ffd60a':'#9fe8ff');DM[v].setAttribute('font-size',36+fl*14);DM[v].style.opacity=ease(f(t,3.5,4.3))}
+ foot.style.opacity=ease(f(t,36.5,37.3));
+ /* S2 panel text */
+ let ci=-1;ev.forEach((T,i)=>{if(t>=T)ci=i});
+ if(ci<0){k0.textContent='Initialize: dist[1] = 0, others ∞';k1.textContent='';k2.textContent=''}
+ else{const c=CK[ci];k0.textContent=c[0];const ok=ci<4,sh=t>=(ev[ci]+.5);k1.textContent=c[1];k2.textContent=sh?c[2]:'';k2.setAttribute('fill',ok?'#37ffa3':'#ff7a90')}
+ /* S3 */
+ calc.style.opacity=ease(f(t,17.5,18.3));rows.forEach((r,i)=>r.style.opacity=ease(f(t,20+.7*i,20.6+.7*i)));
+ /* S4 */
+ CE.forEach((e,i)=>{let s='n';const k=Math.floor((t-CS)/CD_);
+  if(t>=WARN)s='r';else if(k>=0&&k<9&&k%3==i)s='y';st(e,s,t,1)});
+ const k=Math.floor((t-CS)/CD_);
+ if(k>=0&&k<9&&t<WARN){const q=CE[k%3].pt(((t-CS)%CD_)/CD_);pk2.setAttribute('cx',q[0]);pk2.setAttribute('cy',q[1]);pk2.style.opacity=1}else pk2.style.opacity=0;
+ for(const v in CD){let val=v=='A'?0:'∞',ut=-9;CV.forEach(([n,x],i)=>{const T=CS+i*CD_+CD_;if(n==v&&t>=T){val=x;ut=T}});
+  const fl=t-ut<.6?1-(t-ut)/.6:0;CD[v].textContent='d = '+mn(val);CD[v].setAttribute('fill',t>=WARN?'#ff7a90':fl>0?'#ffd60a':'#9fe8ff');CD[v].setAttribute('font-size',36+fl*12)}
+ cw.textContent=CWP.filter(p=>t>=p[0]).map(p=>p[1]).join('');cw.setAttribute('fill',t>=WARN?'#ff6b86':'#ffd60a');
+ ban.style.opacity=ease(f(t,WARN,WARN+.4))*(.8+.2*Math.sin(t*10));
+ red.style.opacity=.16*f(t,WARN,WARN+.6)*(1-ease(f(t,32.2,33)))*(.75+.25*Math.sin(t*8));
+ /* S5 */
+ sm.forEach((g,i)=>{const a=ease(f(t,34.4+i*1.1,35+i*1.1));g.style.opacity=a;g.setAttribute('transform',`translate(${(1-a)*40} 0)`)});
+}
+
+/* audio + narration */
+let ac,padG,muted=false,run=false,t0=0,prev=-1,oscs=[];
+const VO=[[.2,'Bellman-Ford finds the shortest paths from a single source to every other vertex, even when edge weights are negative.',1.3],
+[6.2,'It repeatedly relaxes every edge, updating distances whenever a shorter route is discovered.',1],
+[15.2,'After at most V minus 1 passes, the shortest distance to vertex 4 is 5, along the path 1 to 2 to 3 to 4.',1.05],
+[25.2,'An additional pass detects a reachable negative-weight cycle, where a finite shortest distance cannot be defined.',1.05],
+[33.2,'Bellman-Ford: initialize, relax, repeat, detect, and reconstruct. A powerful algorithm for shortest-path problems.',1.05]];
+const PG=[[7.6,660,'sine'],[9.1,740,'sine'],[10.6,880,'sine'],[12.1,990,'sine'],...CV.map((_,i)=>[CS+CD_*(i+1),620-i*35,'triangle']),[WARN,110,'sawtooth',1.2]];
+function ping(fq,type='sine',dur=.5,vol=.12){if(!ac)return;const n=ac.currentTime,o=ac.createOscillator(),g=ac.createGain();o.type=type;o.frequency.value=fq;g.gain.setValueAtTime(0,n);g.gain.linearRampToValueAtTime(vol,n+.02);g.gain.exponentialRampToValueAtTime(.001,n+dur);o.connect(g);g.connect(master);o.start();o.stop(n+dur+.05)}
+let master;
+function startAudio(){
+ try{if(ac)ac.close();ac=new(window.AudioContext||window.webkitAudioContext)();master=ac.createGain();master.gain.value=muted?0:1;master.connect(ac.destination);
+ const lp=ac.createBiquadFilter();lp.type='lowpass';lp.frequency.value=900;padG=ac.createGain();const n=ac.currentTime;
+ padG.gain.setValueAtTime(0,n);padG.gain.linearRampToValueAtTime(.05,n+2);padG.gain.setValueAtTime(.05,n+37);padG.gain.linearRampToValueAtTime(0,n+40);
+ padG.connect(lp);lp.connect(master);
+ [110,164.81,220,261.63,329.63].forEach((fq,i)=>{const o=ac.createOscillator();o.type=i%2?'triangle':'sine';o.frequency.value=fq;o.detune.value=(i-2)*5;o.connect(padG);o.start();o.stop(n+40.5)});
+ const lf=ac.createOscillator(),lg=ac.createGain();lf.frequency.value=.15;lg.gain.value=350;lf.connect(lg);lg.connect(lp.frequency);lf.start();lf.stop(n+40.5)}catch(e){}
+}
+function speak(s,r){try{const u=new SpeechSynthesisUtterance(s);u.rate=r;u.volume=muted?0:1;u.lang='en-US';const v=speechSynthesis.getVoices().find(x=>/^en[-_](US|GB|IN)/i.test(x.lang));if(v)u.voice=v;speechSynthesis.speak(u)}catch(e){}}
+function start(){
+ try{speechSynthesis.cancel()}catch(e){}
+ startAudio();prev=-1;t0=performance.now();run=true;$('ov').style.display='none';requestAnimationFrame(tick)}
+function tick(){
+ if(!run)return;let t=(performance.now()-t0)/1000;
+ if(t>=40){t=39.99;run=false;$('play').textContent='↻ REPLAY';$('ov').style.display='flex'}
+ VO.forEach(([T,s,r])=>{if(prev<T&&t>=T)speak(s,r)});
+ PG.forEach(([T,fq,ty,d])=>{if(prev<T&&t>=T)ping(fq,ty,d||.5,ty=='sawtooth'?.07:.12)});
+ prev=t;frame(t);$('tm').textContent=t.toFixed(1)+' / 40.0 s';
+ if(run)requestAnimationFrame(tick)}
+$('play').onclick=start;
+$('mu').onclick=()=>{muted=!muted;$('mu').textContent=muted?'🔇 Sound off':'🔊 Sound on';if(master)master.gain.value=muted?0:1;if(muted)try{speechSynthesis.cancel()}catch(e){}};
+try{speechSynthesis.getVoices()}catch(e){}
+frame(0);
+</script></body></html>
